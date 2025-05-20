@@ -29,6 +29,7 @@ class PalletVisualizer:
         self.data = data
         self.plotter = pv.Plotter()
         self.box_meshes: List[pv.PolyData] = []  # Store box meshes for interaction
+        self.info_text = None  # Store the text actor
 
         # Get box dimensions from metadata
         try:
@@ -38,6 +39,56 @@ class PalletVisualizer:
             self.box_height = ship_case["height"]
         except KeyError:
             raise ValueError("Missing required box dimensions in metadata.ship_case")
+
+    def _box_click_callback(self, mesh, event=None):
+        """Callback function for box click events."""
+        if mesh is None:
+            return
+
+        # Find the clicked box by matching the mesh with our stored meshes
+        try:
+            box_index = self.box_meshes.index(mesh)
+            box = self.data["boxes"][box_index]
+
+            # Get bounds in a more readable format
+            x1, x2, y1, y2, z1, z2 = mesh.bounds
+
+            # Create info text
+            info = f"Box Information\n"
+            info += f"---------------\n"
+            info += f"Box Number: {box_index + 1}\n\n"
+            info += f"Dimensions:\n"
+            info += f"  Length: {self.box_length:.2f}\n"
+            info += f"  Width: {self.box_width:.2f}\n"
+            info += f"  Height: {self.box_height:.2f}\n"
+            info += f"---------------\n"
+            info += f"Position:\n"
+            info += f"  X: {box['x']:.2f}\n"
+            info += f"  Y: {box['y']:.2f}\n"
+            info += f"  Z: {box['z']:.2f}\n\n"
+            info += f"Bounds:\n"
+            info += f"  X: [{x1:.2f}, {x2:.2f}]\n"
+            info += f"  Y: [{y1:.2f}, {y2:.2f}]\n"
+            info += f"  Z: [{z1:.2f}, {z2:.2f}]\n\n"
+            info += f"Orientation: {box['orientation']}"
+
+            # Remove old text and add new text
+            if self.info_text:
+                self.plotter.remove_actor(self.info_text)
+
+            self.info_text = self.plotter.add_text(
+                info,
+                position="upper_right",
+                font_size=14,
+                color="black",
+                shadow=True,
+                name="info_text",
+                viewport=True,
+            )
+
+        except (ValueError, IndexError):
+            # If we can't find the box, just ignore the click
+            pass
 
     def plot_boxes(self):
         """Plot all boxes in 3D."""
@@ -92,7 +143,6 @@ class PalletVisualizer:
                 show_edges=True,
                 edge_color=COLOR_EDGE,
                 line_width=1,
-                name=f"box_{i}",  # Give each box a unique name
             )
 
         # Calculate center of pallet
@@ -116,6 +166,7 @@ class PalletVisualizer:
         self.plotter.camera_position = [camera_position, focus_point, up]
 
         self.plotter.enable_mesh_picking(
+            callback=self._box_click_callback,
             left_clicking=True,
             color=COLOR_HIGHLIGHT,
             picker=PickerType.POINT,
