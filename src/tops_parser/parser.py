@@ -22,7 +22,13 @@ class Box:
 
     def to_dict(self) -> Dict:
         """Convert box to dictionary representation."""
-        return {"layer": self.layer, "x": self.x, "y": self.y, "z": self.z, "orientation": self.orientation}
+        return {
+            "layer": self.layer,
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
+            "orientation": self.orientation,
+        }
 
 
 class TopsParser:
@@ -36,10 +42,7 @@ class TopsParser:
             file_path (str): Path to the TOPS exported file
         """
         self.file_path = file_path
-        self.metadata: Dict[str, Dict] = {
-            'ship_case': {},
-            'pallet': {}
-        }
+        self.metadata: Dict[str, Dict] = {"ship_case": {}, "pallet": {}}
         self.boxes: List[Box] = []
         self.layers: Dict[int, List[Box]] = defaultdict(list)
 
@@ -53,40 +56,37 @@ class TopsParser:
         if not os.path.exists(self.file_path):
             raise FileNotFoundError(f"File not found: {self.file_path}")
 
-        self.metadata = {
-            'ship_case': {},
-            'pallet': {}
-        }
+        self.metadata = {"ship_case": {}, "pallet": {}}
         self.boxes = []
         self.layers = defaultdict(list)
 
-        with open(self.file_path, 'r') as f:
+        with open(self.file_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if not line:  # Skip empty lines
                     continue
 
                 # Check for metadata lines
-                if line.startswith('[Ship Case]'):
+                if line.startswith("[Ship Case]"):
                     # Parse ship case metadata
-                    parts = line.strip('[]').split(',')
-                    self.metadata['ship_case'] = {
-                        'name': parts[1].strip('"'),
-                        'spec': parts[2].strip('"'),
-                        'length': float(parts[3]),
-                        'width': float(parts[4]),
-                        'height': float(parts[5])
+                    parts = line.strip("[]").split(",")
+                    self.metadata["ship_case"] = {
+                        "name": parts[1].strip('"'),
+                        "spec": parts[2].strip('"'),
+                        "length": float(parts[3]),
+                        "width": float(parts[4]),
+                        "height": float(parts[5]),
                     }
                     continue
 
-                if line.startswith('[Pallet]'):
+                if line.startswith("[Pallet]"):
                     # Parse pallet metadata
-                    parts = line.strip('[]').split(',')
-                    self.metadata['pallet'] = {
-                        'name': parts[1].strip('"'),
-                        'length': float(parts[2]),
-                        'width': float(parts[3]),
-                        'height': float(parts[4])
+                    parts = line.strip("[]").split(",")
+                    self.metadata["pallet"] = {
+                        "name": parts[1].strip('"'),
+                        "length": float(parts[2]),
+                        "width": float(parts[3]),
+                        "height": float(parts[4]),
                     }
                     continue
 
@@ -115,4 +115,3 @@ class TopsParser:
                 layer_num: [box.to_dict() for box in layer_boxes] for layer_num, layer_boxes in self.layers.items()
             },
         }
-
