@@ -122,7 +122,14 @@ class PalletVisualizer:
 
             # Create box bounds
             x, y, z = box["x"], box["y"], box["z"]
-            bounds = (x, x + dx, y, y + dy, z, z + dz)
+            bounds = (
+                x - dx / 2,
+                x + dx / 2,
+                y - dy / 2,
+                y + dy / 2,
+                z - dz / 2,
+                z + dz / 2,
+            )
 
             # Create box mesh
             box_mesh = pv.Box(bounds=bounds)
