@@ -5,14 +5,15 @@ This module provides functionality to visualize TOPS pallet data in 3D using PyV
 """
 
 import pyvista as pv
-from typing import Dict
+from typing import Dict, List, Optional
 import numpy as np
+from pyvista.plotting.opts import PickerType
 
 # Color constants
 COLOR_BOX_ORIENTATION_0 = "#4a90e2"  # Soft blue for orientation 0
 COLOR_BOX_ORIENTATION_1 = "#e27474"  # Soft red for orientation 1
 COLOR_EDGE = "black"
-COLOR_BACKGROUND = "#f5f5f5"  # Light gray background
+COLOR_HIGHLIGHT = "#ffd700"  # Gold color for highlighting
 
 
 class PalletVisualizer:
@@ -27,6 +28,7 @@ class PalletVisualizer:
         """
         self.data = data
         self.plotter = pv.Plotter()
+        self.box_meshes: List[pv.PolyData] = []  # Store box meshes for interaction
 
         # Get box dimensions from metadata
         try:
@@ -41,20 +43,27 @@ class PalletVisualizer:
         """Plot all boxes in 3D."""
         # Clear previous plot
         self.plotter.clear()
+        self.box_meshes.clear()
 
         # Calculate pallet bounds
         boxes = self.data["boxes"]
 
         # Calculate bounds considering orientation
         x_min = min(box["x"] for box in boxes)
-        x_max = max(box["x"] + (self.box_width if box["orientation"] == 1 else self.box_length) for box in boxes)
+        x_max = max(
+            box["x"] + (self.box_width if box["orientation"] == 1 else self.box_length)
+            for box in boxes
+        )
         y_min = min(box["y"] for box in boxes)
-        y_max = max(box["y"] + (self.box_length if box["orientation"] == 1 else self.box_width) for box in boxes)
+        y_max = max(
+            box["y"] + (self.box_length if box["orientation"] == 1 else self.box_width)
+            for box in boxes
+        )
         z_min = min(box["z"] for box in boxes)
         z_max = max(box["z"] + self.box_height for box in boxes)
 
         # Plot each box
-        for box in boxes:
+        for i, box in enumerate(boxes):
             # Get dimensions based on orientation
             dx = self.box_width if box["orientation"] == 1 else self.box_length
             dy = self.box_length if box["orientation"] == 1 else self.box_width
@@ -66,9 +75,16 @@ class PalletVisualizer:
 
             # Create box mesh
             box_mesh = pv.Box(bounds=bounds)
+            self.box_meshes.append(box_mesh)
 
             # Add box to plotter with color based on orientation
-            color = COLOR_BOX_ORIENTATION_0 if box["orientation"] == 0 else COLOR_BOX_ORIENTATION_1
+            color = (
+                COLOR_BOX_ORIENTATION_0
+                if box["orientation"] == 0
+                else COLOR_BOX_ORIENTATION_1
+            )
+
+            # Add mesh with a unique name
             self.plotter.add_mesh(
                 box_mesh,
                 color=color,
@@ -76,20 +92,17 @@ class PalletVisualizer:
                 show_edges=True,
                 edge_color=COLOR_EDGE,
                 line_width=1,
+                name=f"box_{i}",  # Give each box a unique name
             )
-
-        # Set title
-        self.plotter.add_text(f"Pallet {self.data['pallet_id']}", font_size=20, position="upper_edge")
-
-        # Set background color
-        self.plotter.set_background(COLOR_BACKGROUND)
 
         # Calculate center of pallet
         center = [(x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max) / 2]
 
         # Calculate camera distance based on pallet size
         size = max(x_max - x_min, y_max - y_min, z_max - z_min)
-        distance = size * 2  # Adjust this multiplier to change how much of the pallet is visible
+        distance = (
+            size * 2
+        )  # Adjust this multiplier to change how much of the pallet is visible
 
         # Set camera position
         camera_position = [
@@ -101,6 +114,12 @@ class PalletVisualizer:
         up = [0, 0, 1]  # Keep Z-axis pointing up
 
         self.plotter.camera_position = [camera_position, focus_point, up]
+
+        self.plotter.enable_mesh_picking(
+            left_clicking=True,
+            color=COLOR_HIGHLIGHT,
+            picker=PickerType.POINT,
+        )
 
     def show(self):
         """Display the plot."""
