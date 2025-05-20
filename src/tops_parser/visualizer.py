@@ -5,7 +5,7 @@ This module provides functionality to visualize TOPS pallet data in 3D using PyV
 """
 
 import pyvista as pv
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 import numpy as np
 from pyvista.plotting.opts import PickerType
 
@@ -14,6 +14,8 @@ COLOR_BOX_ORIENTATION_0 = "#4a90e2"  # Soft blue for orientation 0
 COLOR_BOX_ORIENTATION_1 = "#e27474"  # Soft red for orientation 1
 COLOR_EDGE = "black"
 COLOR_HIGHLIGHT = "#ffd700"  # Gold color for highlighting
+COLOR_PALLET = "#8B4513"  # Brown color for pallet base
+COLOR_GAP = "#ff0000"  # Bright red color for gap indicators
 
 
 class PalletVisualizer:
@@ -67,9 +69,9 @@ class PalletVisualizer:
             info += f"  Y: {box['y']:.2f}\n"
             info += f"  Z: {box['z']:.2f}\n\n"
             info += f"Bounds:\n"
-            info += f"  X: [{x1:.2f}, {x2:.2f}]\n"
-            info += f"  Y: [{y1:.2f}, {y2:.2f}]\n"
-            info += f"  Z: [{z1:.2f}, {z2:.2f}]\n\n"
+            info += f"  X: [{x1:.4f}, {x2:.4f}]\n"
+            info += f"  Y: [{y1:.4f}, {y2:.4f}]\n"
+            info += f"  Z: [{z1:.4f}, {z2:.4f}]\n\n"
             info += f"Orientation: {box['orientation']}"
 
             # Remove old text and add new text
@@ -90,6 +92,39 @@ class PalletVisualizer:
             # If we can't find the box, just ignore the click
             pass
 
+    def _find_layer_gaps(self) -> List[Tuple[float, float]]:
+        """
+        Find gaps between layers in the pallet.
+
+        Returns:
+            List[Tuple[float, float]]: List of (bottom_height, top_height) tuples representing gaps
+        """
+        # Get all unique heights where boxes are placed
+        heights = sorted(set(box["z"] for box in self.data["boxes"]))
+
+        # Get pallet height from metadata
+        pallet_height = self.data["metadata"]["pallet"]["height"]
+
+        gaps = []
+
+        # Check gap between pallet and first layer
+        if heights and heights[0] > pallet_height:
+            gaps.append((pallet_height, heights[0]))
+
+        # Check gaps between layers
+        for i in range(len(heights) - 1):
+            current_height = heights[i]
+            next_height = heights[i + 1]
+            # Add box height to current layer height to find actual top
+            current_layer_top = current_height + self.box_height
+            height_diff = next_height - current_layer_top
+
+            # If there's a gap of more than 1mm between layers
+            if height_diff > 0.001:
+                gaps.append((current_layer_top, next_height))
+
+        return gaps
+
     def plot_boxes(self):
         """Plot all boxes in 3D."""
         # Clear previous plot
@@ -98,6 +133,46 @@ class PalletVisualizer:
 
         # Calculate pallet bounds
         boxes = self.data["boxes"]
+
+        # Get pallet dimensions from metadata
+        pallet = self.data["metadata"]["pallet"]
+        pallet_length = pallet["length"]
+        pallet_width = pallet["width"]
+        pallet_height = pallet["height"]
+
+        # Create and add pallet base
+        pallet_bounds = (-pallet_length / 2, pallet_length / 2, -pallet_width / 2, pallet_width / 2, 0, pallet_height)
+        pallet_mesh = pv.Box(bounds=pallet_bounds)
+        self.plotter.add_mesh(
+            pallet_mesh,
+            color=COLOR_PALLET,
+            opacity=0.3,  # Semi-transparent
+            show_edges=True,
+            edge_color=COLOR_EDGE,
+            line_width=1,
+        )
+
+        # Find and visualize gaps between layers
+        gaps = self._find_layer_gaps()
+        for bottom_height, top_height in gaps:
+            # Create a semi-transparent plane to show the gap
+            gap_plane = pv.Plane(
+                center=(0, 0, (bottom_height + top_height) / 2),
+                direction=(0, 0, 1),
+                i_size=pallet_length,
+                j_size=pallet_width,
+            )
+
+            self.plotter.add_mesh(
+                gap_plane,
+                color=COLOR_GAP,
+                opacity=1,  # Increased opacity
+                show_edges=True,
+                edge_color=COLOR_GAP,
+                line_width=3,  # Thicker edges
+                style="surface",  # Solid surface
+                render_lines_as_tubes=True,  # Make lines more visible
+            )
 
         # Calculate bounds considering orientation
         x_min = min(box["x"] for box in boxes)
@@ -127,8 +202,8 @@ class PalletVisualizer:
                 x + dx / 2,
                 y - dy / 2,
                 y + dy / 2,
-                z - dz / 2,
-                z + dz / 2,
+                z,
+                z + dz,
             )
 
             # Create box mesh
